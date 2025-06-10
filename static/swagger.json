@@ -1,0 +1,109 @@
+{
+    "swagger": "2.0",
+    "info": {
+      "title": "InovaTech API",
+      "version": "1.0",
+      "description": "Documentação da API do laboratório de criação de APIs"
+    },
+    "host": "localhost:1313", "schemes": ["http"],
+    "basePath": "/",
+    "paths": {
+      "/": {
+        "get": {
+          "summary": "Endpoint principal",
+          "description": "Verifica o status da API",
+          "produces": ["application/json"],
+          "responses": {
+            "200": {
+              "description": "Mensagem de status",
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "message": {"type": "string", "example": "API is running"}
+                }
+              }
+            }
+          }
+        }
+      },
+      "/items": {
+        "get": {
+          "summary": "Obter lista de itens",
+          "description": "Retorna uma lista de itens disponíveis.",
+          "produces": ["application/json"],
+          "responses": {
+            "200": {
+              "description": "Lista de itens",
+              "schema": {
+                "type": "object",
+                "properties": {
+                    "items": {
+                        "type": "array",
+                        "items": {"type": "string", "example": "item1"}
+                    }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/login": {
+        "post": {
+          "summary": "Login para gerar token JWT",
+          "description": "Gera um token JWT para autenticação.",
+          "produces": ["application/json"],
+          "responses": {
+            "200": {
+              "description": "Token de autenticação",
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "access_token": {
+                    "type": "string",
+                    "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/protected": {
+        "get": {
+          "summary": "Rota protegida",
+          "description": "Acessa uma rota protegida. Requer token JWT.",
+          "produces": ["application/json"],
+          "security": [
+            {
+              "BearerAuth": []
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Acesso permitido à rota protegida",
+              "schema": {
+                 "type": "object",
+                 "properties": {
+                   "message": {"type": "string", "example": "Protected route"}
+                 }
+              }
+            },
+            "401": {
+              "description": "Autenticação falhou ou token ausente (Unauthorized)"
+            },
+            "422": {
+                "description": "Token inválido ou malformado (Unprocessable Entity)"
+            }
+          }
+        }
+      }
+    },
+    "securityDefinitions": {
+      "BearerAuth": {  
+        "type": "apiKey",
+        "name": "Authorization",
+        "in": "header",
+        "description": "Token JWT. Exemplo: \"Bearer {token}\""
+      }
+    }
+  }
