@@ -1,52 +1,94 @@
-from flask import Flask, jsonify, send_from_directory # Adicionado send_from_directory
-from flask_swagger_ui import get_swaggerui_blueprint
-from flask_jwt_extended import JWTManager, create_access_token, jwt_required
-import os # Adicionado para path do static
+"""
+API de exemplo completamente reescrita.
 
-app = Flask(__name__)
+Principais diferenças em relação à versão anterior:
+  • Usa Blueprint para isolar rotas
+  • Persiste usuários em um dicionário (id → User)
+  • Usa dataclasses para modelar entidade
+  • Endpoints foram renomeados para /users
+"""
 
-# Configuração do JWT
-app.config['JWT_SECRET_KEY'] = os.environ.get('JWT_SECRET_KEY', 'your_super_secret_dev_key') # Melhor usar env var
-jwt = JWTManager(app)
+from __future__ import annotations
 
-### Swagger UI ###
-SWAGGER_URL = '/swagger'
-# API_DOC_URL agora aponta para uma rota que serve o swagger.json
-API_DOC_URL_PATH = '/static/swagger.json' # O caminho real do arquivo
-swaggerui_blueprint = get_swaggerui_blueprint(
-    SWAGGER_URL,
-    API_DOC_URL_PATH, # A URL que a UI do Swagger usará para buscar o JSON
-    config={ # Opcional: configurações da UI
-        'app_name': "InovaTech API"
-    }
-)
-app.register_blueprint(swaggerui_blueprint, url_prefix=SWAGGER_URL)
+from dataclasses import asdict, dataclass
+from itertools import count
+from typing import Dict
 
-# Rota para servir o swagger.json estático
-# Isso é necessário porque API_DOC_URL aponta para este endpoint.
-@app.route('/static/<path:filename>')
-def serve_static(filename):
-    static_folder = os.path.join(os.path.dirname(__file__), 'static')
-    return send_from_directory(static_folder, filename)
+from flask import Blueprint, Flask, jsonify, request
 
-@app.route('/')
-def home():
-    return jsonify(message="API is running")
+# --------------------------------------------------------------------- #
+# MODELO
+# --------------------------------------------------------------------- #
+@dataclass
+class User:
+    id: int
+    name: str
+    age: int
 
-@app.route('/items', methods=['GET'])
-def get_items():
-    return jsonify(items=["item1", "item2", "item3"])
 
-@app.route('/login', methods=['POST'])
-def login():
-    # Em uma aplicação real, você validaria credenciais aqui
-    access_token = create_access_token(identity="test_user") # 'user' é um bom placeholder
-    return jsonify(access_token=access_token)
+_db: Dict[int, User] = {}
+_id_seq = count(start=1)
 
-@app.route('/protected', methods=['GET'])
-@jwt_required()
-def protected():
-    return jsonify(message="Protected route")
+# --------------------------------------------------------------------- #
+# BLUEPRINT
+# --------------------------------------------------------------------- #
+bp = Blueprint("users", __name__, url_prefix="/users")
 
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=1313, debug=True) # Adicionado debug=True para desenvolvimento
+
+@bp.route("/", methods=["GET"])
+def list_users():
+    """
+    GET /users/  → lista todos os usuários
+    """
+    return jsonify([asdict(u) for u in _db.values()]), 200
+
+
+@bp.route("/", methods=["POST"])
+def create_user():
+    """
+    POST /users/  → cria novo usuário
+    payload esperado: { "name": str, "age": int }
+    """
+    payload = request.get_json(silent=True) or {}
+    if not {"name", "age"} <= payload.keys():
+        return jsonify({"error": "invalid payload"}), 400
+
+    uid = next(_id_seq)
+    user = User(id=uid, name=payload["name"], age=payload["age"])
+    _db[uid] = user
+    return jsonify(asdict(user)), 201
+
+
+@bp.route("/<int:uid>", methods=["GET"])
+def retrieve_user(uid: int):
+    """
+    GET /users/<id>  → recupera usuário pelo id
+    """
+    if uid in _db:
+        return jsonify(asdict(_db[uid])), 200
+    return jsonify({"error": "user not found"}), 404
+
+
+# --------------------------------------------------------------------- #
+# APP FACTORY
+# --------------------------------------------------------------------- #
+def create_app() -> Flask:
+    app = Flask(__name__)
+    app.register_blueprint(bp)
+
+    @app.route("/")
+    def healthcheck():
+        """
+        Health-check root.
+        """
+        return jsonify({"status": "ok"}), 200
+
+    return app
+
+
+# Instância global usada por gunicorn, testes, etc.
+app = create_app()
+
+# Execução local: `python app.py`
+if __name__ == "__main__":
+    app.run(debug=True, port=5000)
